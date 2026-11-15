@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "IsobusVtInterface.hpp"
+#include "AuxAssignmentStore.hpp"
 
 // The header is itself empty unless ISOBUS is defined (see its own comment) --
 // guard the body too, so this compiles to an empty translation unit instead
@@ -154,6 +155,21 @@ void IsobusVtInterface::createClient(const std::vector<NAMEFilter>& filters) {
     auxFunctionListener = vtClient->get_auxiliary_function_event_dispatcher().add_listener(
         [this](const VirtualTerminalClient::AuxiliaryFunctionEvent& e) { workingSet->OnAuxFunction(e); });
     workingSet->OnClientCreated(vtClient);
+    // AUX-N is opt-in since AgIsoStack 02f3fe9 (upstream #655): without this
+    // the client ignores the VT's assignment commands (#254). It can only be
+    // set before initialize(), and the reconnect's terminate() + initialize()
+    // keeps it.
+    vtClient->set_auxiliary_functions_enabled(true);
+    // The operator's preferred assignments, kept between power-ups when the
+    // working set has a store for them (ISO 11783-6 J.7). AgIsoStack loads a
+    // device's preferences when it first sees it and sends them in our
+    // Preferred Assignment; it stores them when the VT assigns with "store
+    // as preferred". Every client gets the same store, so a VT switch keeps
+    // them too. Like the AUX-N switch above: before initialize() only.
+    if (AuxAssignmentStore* store = workingSet->GetAuxAssignmentStore()) {
+        vtClient->set_auxiliary_assignment_callbacks(&AuxAssignmentStore::LoadCallback,
+                                                     &AuxAssignmentStore::StoreCallback, store);
+    }
     vtClient->initialize(false);
 }
 

@@ -94,16 +94,19 @@ const char* PloughVtWorkingSet::GetPoolLabel() const {
     // MW16 -> MW17, 2026-11-07: the control's state on the main screen
     // (#318), and both ANNUL. keys on row 5 for the 1200's 2 x 5 keys
     // (session 23).
-    // MW17 -> MW18, 2026-11-15: the state in an 8x12 font, 9 characters
+    // MW17 -> MW18, 2026-11-08: AgIsoStack on upstream main 02f3fe9, whose soft
+    // key and font scaling (#827, #832, #833) differ from the fork's 4625be4, so
+    // no VT may keep serving a pool scaled by the old library.
+    // MW18 -> MW19, 2026-11-15: the state in an 8x12 font, 9 characters
     // wide (GPS FOUT / TE TRAAG instead of H G! / H S!).
     // The English and Hungarian pools are different pools, so each has its
     // own label: a terminal that has cached one must not show it for another.
 #if defined(ENGLISH)
-    return "MW18E";
+    return "MW19E";
 #elif defined(HUNGARIAN)
-    return "MW18H";
+    return "MW19H";
 #else
-    return "MW18";
+    return "MW19";
 #endif
 }
 
