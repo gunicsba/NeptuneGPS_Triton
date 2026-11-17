@@ -110,12 +110,14 @@ const char* PloughVtWorkingSet::GetPoolLabel() const {
     // passes now and at each end, in place of NIEUW VELD, SPOOR and BREEDTE.
     // MW21 -> MW22, 2026-11-17: HYDRAULIEK (normaal / bypass / Danfoss) in
     // place of the BYPASS yes/no on the calibration page.
+    // MW22 -> MW23, 2026-11-17: AUTO / KEZI on the main screen, the
+    // hydraulics page (HIDR. on the calibration page), the key labels 8x12.
 #if defined(ENGLISH)
-    return "MW22E";
+    return "MW23E";
 #elif defined(HUNGARIAN)
-    return "MW22H";
+    return "MW23H";
 #else
-    return "MW22";
+    return "MW23";
 #endif
 }
 
@@ -244,6 +246,11 @@ void PloughVtWorkingSet::UpdateValues() {
     }
     // The control's state (#318), with the hold reason the LCD shows.
     const uint16_t state = StateString(controlMode, controlCalibrating, PloughHoldReason(*guidance, millis()));
+    // The AUTO / KEZI key's label: the choice held.
+    if (forceSend || manualRequested != lastSentManual) {
+        client->send_change_string_value(Label_AutoMan, manualRequested ? kTextKeyManual : kTextKeyAuto);
+        lastSentManual = manualRequested;
+    }
     if (forceSend || state != lastSentState) {
         client->send_change_numeric_value(Ptr_State, state);
         lastSentState = state;
@@ -382,6 +389,12 @@ bool PloughVtWorkingSet::OnKeyEvent(const VirtualTerminalClient::VTKeyEvent& eve
             serialDebug->println("VT: Calibrate pressed");
             if (calibration != nullptr) calibration->OnCalibrateKey();
             break;
+        case Key_AutoMan:
+            manualRequested = !manualRequested;
+            serialDebug->println(manualRequested ? "VT: KEZI (manual) chosen" : "VT: AUTO chosen");
+            break;
+        case Key_CalHyd:
+        case Key_HydBack:
         case Key_CalSave:
         case Key_CalCancel:
         case Key_CalWidth:
@@ -390,8 +403,14 @@ bool PloughVtWorkingSet::OnKeyEvent(const VirtualTerminalClient::VTKeyEvent& eve
             // A saved page may have changed the preferred VT (#255).
             return calibration != nullptr && calibration->OnSoftKey(event.objectID);
         default:
-            // PLAN and the planner's pages (IsobusVtPlanner).
-            if (planner != nullptr) planner->OnSoftKey(event.objectID, millis() - pressedTapKeyAt);
+            // PLAN and the planner's pages (IsobusVtPlanner). LIMIT opens from
+            // the calibration page, and goes back there.
+            if (planner != nullptr) {
+                if (event.objectID == Key_PlanRange) {
+                    planner->SetRangeReturnsToCalibration(calibration != nullptr && calibration->IsOpen());
+                }
+                planner->OnSoftKey(event.objectID, millis() - pressedTapKeyAt);
+            }
             break;
     }
     return false;

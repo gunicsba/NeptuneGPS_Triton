@@ -166,7 +166,10 @@ ImplementPlough::ImplementPlough(Stream* serialDebug, GuidanceSource* guidance) 
     // Get latest offset from EEPROM
     readOffset();
 
-    // A Danfoss valve idles on a 50 % signal, not on 0 V.
+    // A Danfoss valve idles on its Center signal, not on 0 V.
+    readDanfossTuning();
+    danfossNextPct = danfoss[uint8_t(DanfossParam::Manual)];
+    danfossSignalPwm = 0;
     danfossNeutralSinceMs = millis();
     if (hydraulics == HydraulicType::Danfoss) Stop();
 
@@ -281,20 +284,12 @@ void ImplementPlough::Adjust(byte mode, short int direction) {
             pwm = kValvePwm;
     }
 
-    // A proportional valve in auto: the deflection follows the error, so it
-    // slows down towards the setpoint instead of overshooting it at full
-    // deflection. Manual drives at kDanfossManualPwm.
-    if ((mode == 2 || mode == 3) && hydraulics == HydraulicType::Danfoss) {
-        pwm = kDanfossManualPwm;
-    }
-    if (mode == 0 && hydraulics == HydraulicType::Danfoss) {
-        const int beyond = abs(position - setpoint) - deadband;
-        if (beyond >= kDanfossFullErrorCm) {
-            pwm = kValvePwm;
-        }
-        else if (beyond > 0) {
-            pwm = byte(kDanfossMinPwm + (int(kValvePwm) - kDanfossMinPwm) * beyond / kDanfossFullErrorCm);
-        }
+    // A proportional valve: in auto the deflection follows the error, so it
+    // slows down towards the setpoint instead of overshooting it; the
+    // buttons drive at Manual (DanfossParam).
+    if (hydraulics == HydraulicType::Danfoss) {
+        danfossNextPct = mode == 0 ? DanfossAutoPct(abs(position - setpoint) - deadband)
+                                   : danfoss[uint8_t(DanfossParam::Manual)];
     }
 
     // ------------------------------
@@ -336,7 +331,9 @@ void ImplementPlough::Adjust(byte mode, short int direction) {
 // ------------------------------------
 void ImplementPlough::Narrower(byte pwm) {
     if (hydraulics == HydraulicType::Danfoss) {
-        driveDanfoss(byte(kDanfossNeutralPwm - (kDanfossNeutralPwm - kDanfossNarrowerPwm) * pwm / 255));
+        const int center = danfoss[uint8_t(DanfossParam::Center)];
+        driveDanfoss(DanfossPctToPwm(pwm ? center - danfossNextPct : center));
+        danfossNextPct = danfoss[uint8_t(DanfossParam::Manual)];
 #ifdef OUTPUT_LED_2
         digitalWrite(OUTPUT_LED_2, pwm ? HIGH : LOW);
 #endif
@@ -363,7 +360,9 @@ void ImplementPlough::Narrower(byte pwm) {
 // ---------------------------------
 void ImplementPlough::Wider(byte pwm) {
     if (hydraulics == HydraulicType::Danfoss) {
-        driveDanfoss(byte(kDanfossNeutralPwm + (kDanfossWiderPwm - kDanfossNeutralPwm) * pwm / 255));
+        const int center = danfoss[uint8_t(DanfossParam::Center)];
+        driveDanfoss(DanfossPctToPwm(pwm ? center + danfossNextPct : center));
+        danfossNextPct = danfoss[uint8_t(DanfossParam::Manual)];
 #ifdef OUTPUT_LED_2
         digitalWrite(OUTPUT_LED_2, pwm ? HIGH : LOW);
 #endif
@@ -387,7 +386,7 @@ void ImplementPlough::Wider(byte pwm) {
 // ------------------------------
 void ImplementPlough::Stop() {
     if (hydraulics == HydraulicType::Danfoss) {
-        driveDanfoss(kDanfossNeutralPwm);
+        driveDanfoss(DanfossPctToPwm(danfoss[uint8_t(DanfossParam::Center)]));
 #ifdef OUTPUT_LED_2
         digitalWrite(OUTPUT_LED_2, LOW);
 #endif
@@ -424,13 +423,47 @@ void ImplementPlough::SetHydraulics(HydraulicType value) {
 }
 
 // ----------------------------------------------------------------------
+// The Danfoss tuning: each byte as stored if within its bounds, else its
+// default; set from the VT's HYDRAULIEK page and stored at once (only a
+// byte that changes is written; main.cpp's loop commits it on the ESP32).
+// ----------------------------------------------------------------------
+void ImplementPlough::readDanfossTuning() {
+    for (uint8_t i = 0; i < kDanfossParamCount; i++) {
+        const byte stored = EEPROM.read(kEepromDanfossTuning + i);
+        danfoss[i] = IsValidDanfoss(DanfossParam(i), stored) ? stored : kDanfossParams[i].byDefault;
+    }
+}
+
+bool ImplementPlough::SetDanfoss(DanfossParam param, int value) {
+    if (uint8_t(param) >= kDanfossParamCount || !IsValidDanfoss(param, value)) return false;
+    danfoss[uint8_t(param)] = byte(value);
+    if (EEPROM.read(kEepromDanfossTuning + uint8_t(param)) != byte(value)) {
+        EEPROM.write(kEepromDanfossTuning + uint8_t(param), byte(value));
+    }
+    danfossNextPct = danfoss[uint8_t(DanfossParam::Manual)];
+    return true;
+}
+
+// Auto's deflection for an error `beyondCm` past the deadband: AutoMin just
+// past it, rising to AutoMax at FullError (AutoMin above AutoMax: AutoMax).
+byte ImplementPlough::DanfossAutoPct(int beyondCm) const {
+    const int most  = danfoss[uint8_t(DanfossParam::AutoMax)];
+    const int least = min(int(danfoss[uint8_t(DanfossParam::AutoMin)]), most);
+    const int full  = danfoss[uint8_t(DanfossParam::FullError)];
+    if (beyondCm >= full) return byte(most);
+    if (beyondCm <= 0) return byte(least);
+    return byte(least + (most - least) * beyondCm / full);
+}
+
+// ----------------------------------------------------------------------
 // Danfoss proportional valve: the signal duty on F1 (the narrow output,
 // the wide one held low; on Triton01 bridge 1's EN, PH fixed at the narrow
 // level) and the PVE's supply on F2, the bypass output, on all the time.
 // ----------------------------------------------------------------------
 void ImplementPlough::driveDanfoss(byte signal) {
     const bool powered = millis() - danfossNeutralSinceMs >= kDanfossPowerDelayMs;
-    if (!powered) signal = kDanfossNeutralPwm;   // the valve powers up on neutral only
+    if (!powered) signal = DanfossPctToPwm(danfoss[uint8_t(DanfossParam::Center)]);   // powers up on neutral only
+    danfossSignalPwm = signal;
 #if defined(OUTPUT_VALVE_PH_2)
     digitalWrite(OUTPUT_VALVE_PH_2, OUTPUT_NARROW_PH_LEVEL);
     analogWrite(OUTPUT_VALVE_EN_2, signal);
