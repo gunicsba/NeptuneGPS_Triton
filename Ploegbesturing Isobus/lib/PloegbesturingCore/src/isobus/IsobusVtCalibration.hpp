@@ -68,6 +68,7 @@ public:
 
     bool IsOpen() const { return open; }
     bool IsWidthProcedureOpen() const { return widthOpen; }
+    bool IsHydraulicsOpen() const { return hydOpen; }
 
     // The Calibrate key, on release. Opens the page unless the cab wizard
     // holds the session.
@@ -129,6 +130,17 @@ private:
     void openWidthProcedure();
     void closeWidthProcedure();
     void updateWidthProcedure(VtCalibrationOutput& out);
+
+    // The hydraulics page (HIDR.): the Danfoss tuning, stored at once as the
+    // operator enters it (ImplementPlough::SetDanfoss), the signal on F1 now,
+    // and Smaller / Breder driving at the manual deflection while held.
+    bool          hydOpen = false;
+    uint32_t      shownHyd[kDanfossParamCount];
+    uint32_t      shownHydSignal = kNotSent;
+    unsigned long lastHydSignalMs = 0;
+    void openHydraulics();
+    void closeHydraulics();
+    void updateHydraulics(VtCalibrationOutput& out);
 };
 
 }  // namespace triton

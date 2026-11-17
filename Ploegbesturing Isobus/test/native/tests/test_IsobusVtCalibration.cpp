@@ -379,6 +379,45 @@ test(IsobusVtCalibration, widthKeys_driveNothing_outsideTheProcedure) {
     assertEqual(digitalWriteValue(OUTPUT_NARROW_2), LOW);
 }
 
+// The hydraulics page (HIDR.): the Danfoss tuning shown and stored at once,
+// the signal on F1 sent, + / - drive while held, TERUG back to the page.
+test(IsobusVtCalibration, hydraulicsPage_showsStoresAndDrives) {
+    resetAll();
+    Rig r;
+    r.impl.SetHydraulics(HydraulicType::Danfoss);
+    millisValue(kDanfossPowerDelayMs);
+    r.page.OnCalibrateKey();
+    r.page.OnSoftKey(Key_CalHyd);
+    assertTrue(r.page.IsHydraulicsOpen());
+    r.page.Update(r.out);
+    assertEqual((int)r.out.masks.back(), (int)Plough_HydMask);
+    assertEqual(r.out.last(Input_Hyd0 + uint8_t(DanfossParam::Center)), 50L);
+    assertEqual(r.out.last(Input_Hyd0 + uint8_t(DanfossParam::Manual)), 15L);
+    assertEqual(r.out.last(Var_HydSignal), long((DanfossPctToPwm(50) * 1000 + 127) / 255));
+
+    r.page.OnNumericValue(Input_Hyd0 + uint8_t(DanfossParam::Center), 52);
+    assertEqual((int)r.impl.GetDanfoss(DanfossParam::Center), 52);
+    assertEqual((int)EEPROM.read(kEepromDanfossTuning), 52);           // at once, no OPSLAAN
+    r.page.OnNumericValue(Input_Hyd0 + uint8_t(DanfossParam::Manual), 99);   // refused
+    assertEqual((int)r.impl.GetDanfoss(DanfossParam::Manual), 15);
+    r.out.clear();
+    r.page.Update(r.out);
+    assertEqual(r.out.last(Input_Hyd0 + uint8_t(DanfossParam::Manual)), 15L);   // shown again
+
+    r.page.OnWidthKey(Key_CalWider, HeldKey::Event::Press);
+    r.page.Update(r.out);
+    assertEqual(analogWriteValue(OUTPUT_NARROW_2), (int)DanfossPctToPwm(52 + 15));
+    r.page.OnWidthKey(Key_CalWider, HeldKey::Event::Release);
+    r.page.Update(r.out);
+    assertEqual(analogWriteValue(OUTPUT_NARROW_2), (int)DanfossPctToPwm(52));
+
+    r.page.OnSoftKey(Key_HydBack);
+    assertFalse(r.page.IsHydraulicsOpen());
+    assertTrue(r.page.IsOpen());
+    r.page.Update(r.out);
+    assertEqual((int)r.out.masks.back(), (int)Plough_CalDataMask);
+}
+
 test(IsobusVtCalibration, threeCaptures_stageTheReadings_andOpslaanWritesThem) {
     resetAll();
     Rig r;
