@@ -406,7 +406,9 @@ test(IsobusVtCalibration, hydraulicsPage_showsStoresAndDrives) {
 
     r.page.OnWidthKey(Key_CalWider, HeldKey::Event::Press);
     r.page.Update(r.out);
-    assertEqual(analogWriteValue(OUTPUT_NARROW_2), (int)DanfossPctToPwm(52 + 15));
+    // Breder is +1, which drives Narrower() (the main keys and the width
+    // procedure alike): Center - Manual. The hoses set the real direction.
+    assertEqual(analogWriteValue(OUTPUT_NARROW_2), (int)DanfossPctToPwm(52 - 15));
     r.page.OnWidthKey(Key_CalWider, HeldKey::Event::Release);
     r.page.Update(r.out);
     assertEqual(analogWriteValue(OUTPUT_NARROW_2), (int)DanfossPctToPwm(52));
