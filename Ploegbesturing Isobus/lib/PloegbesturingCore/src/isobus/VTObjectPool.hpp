@@ -342,6 +342,20 @@ enum PloughVtObjectId : uint16_t {
     Label_HydSignal            = 345,
     Out_HydSignal              = 346,
     Var_HydSignal              = 347,   // the signal on F1, 0.1 %
+
+    // The range bar's correction limits (2026-11-17): red lines at the main
+    // width -/+ the max correction (KORR/FEJ), two lines each.
+    Bar_CorrLo                 = 348,
+    Bar_CorrLo2                = 349,
+    Bar_CorrHi                 = 350,
+    Bar_CorrHi2                = 351,
+    Var_BarCorrLo              = 352,   // mm per share, 200-600
+    Var_BarCorrHi              = 353,
+    // The width now 7 lines wide (3 until 2026-11-17): the 4 inner lines.
+    Bar_RangeNowL2             = 354,
+    Bar_RangeNowR2             = 355,
+    Bar_RangeNowL3             = 356,
+    Bar_RangeNowR3             = 357,
 };
 
 // The AUTO / KEZI key's two labels, the same length (the label object's).

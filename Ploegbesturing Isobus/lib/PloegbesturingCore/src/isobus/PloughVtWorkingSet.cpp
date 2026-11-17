@@ -110,12 +110,14 @@ const char* PloughVtWorkingSet::GetPoolLabel() const {
     // MW22 -> MW23, 2026-11-17: AUTO / KEZI on the main screen, the
     // hydraulics page (HIDR. on the calibration page), the key labels 8x12.
     // MW23 -> MW24, same day: the settings key INSTEL. / SETUP / BEALL.
+    // MW24 -> MW25, same day: the key labels 12x16 (5 characters), red
+    // KORR/FEJ limit lines on the range bar, the width now 7 lines wide.
 #if defined(ENGLISH)
-    return "MW24E";
+    return "MW25E";
 #elif defined(HUNGARIAN)
-    return "MW24H";
+    return "MW25H";
 #else
-    return "MW24";
+    return "MW25";
 #endif
 }
 
