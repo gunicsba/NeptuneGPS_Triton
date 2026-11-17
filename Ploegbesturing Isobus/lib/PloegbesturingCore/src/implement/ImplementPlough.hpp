@@ -90,23 +90,30 @@ enum class HydraulicType : byte {
 };
 static constexpr byte kHighestHydraulicType = byte(HydraulicType::Danfoss);
 
-// The Danfoss tuning, set on the VT's HYDRAULIEK page and stored at once,
-// one byte each at EEPROM kEepromDanfossTuning + the parameter (30-34:
-// past the vehicle sensors' 20-28, before the plough's block at 40). All
-// in % of the supply on F1, except FullError:
+// The hydraulics tuning, set on the VT's HYDRAULIEK page and stored at
+// once, one byte each at EEPROM kEepromDanfossTuning + the parameter (30-37:
+// past the vehicle sensors' 20-28, before the plough's block at 40).
+// Danfoss, in % of the supply on F1:
 //   Center    -- the signal at rest (neutral), 30-70.
 //   Manual    -- the deflection from Center the buttons drive at, 1-45.
 //   AutoMax   -- the most deflection auto drives at, 1-45.
 //   AutoMin   -- the deflection just past the deadband in auto, 0-45:
 //                the least that still moves the spool.
+// Both:
 //   FullError -- the error past the deadband (cm) where auto reaches
 //                AutoMax, 1-50; larger is gentler.
+// Normal and bypass, the solenoids' PWM duty in % (100 = on, as before;
+// switched boards without PWM, the Teensy's 20/21, stay on / off):
+//   DutyManual, DutyAutoMax -- 1-100; DutyAutoMin -- 0-100.
 enum class DanfossParam : uint8_t {
     Center,
     Manual,
     AutoMax,
     AutoMin,
     FullError,
+    DutyManual,
+    DutyAutoMax,
+    DutyAutoMin,
     Count
 };
 static constexpr uint8_t kDanfossParamCount = uint8_t(DanfossParam::Count);
@@ -124,8 +131,16 @@ static constexpr DanfossParamLine kDanfossParams[kDanfossParamCount] = {
     {  1, 45, 15 },   // AutoMax
     {  0, 45,  5 },   // AutoMin
     {  1, 50, 10 },   // FullError
+    {  1, 100, 100 }, // DutyManual: full, as the solenoids always were
+    {  1, 100, 100 }, // DutyAutoMax
+    {  0, 100, 100 }, // DutyAutoMin: full from the deadband on, the bang-bang control
 };
 static_assert(kEepromDanfossTuning + kDanfossParamCount <= 40, "the Danfoss tuning runs into the plough's block");
+
+// The VT hydraulics page's rows after the type: KOZEP, KEZI, AUTO MAX, AUTO
+// MIN, TELJES. KEZI and the AUTO rows edit the Danfoss deflection or the
+// solenoids' duty, by the type (IsobusVtCalibration::HydParamFor()).
+constexpr uint8_t kHydRows = 5;
 
 // A % of the supply as a duty of 255, rounded.
 static constexpr byte DanfossPctToPwm(int pct) {
@@ -376,6 +391,8 @@ public:
 
     // Stops the plough and switches the outputs over. Out of range: Normal.
     void SetHydraulics(HydraulicType value);
+    // The same, stored at once (EEPROM 68): the VT's HIDR. page.
+    void SetHydraulicsStored(HydraulicType value);
 
     // The Danfoss tuning (DanfossParam). Set refuses a value outside the
     // parameter's bounds (false) and stores the rest at once.
@@ -391,6 +408,8 @@ public:
     // Auto's deflection (% of the supply) for an error `beyondCm` past the
     // deadband: AutoMin just past it, AutoMax from FullError on.
     byte DanfossAutoPct(int beyondCm) const;
+    // The same for the solenoids' duty: DutyAutoMin to DutyAutoMax.
+    byte DutyAutoPct(int beyondCm) const;
 
     // The duty on F1 now (of 255), while the hydraulics are Danfoss.
     inline byte GetDanfossSignalPwm() const {

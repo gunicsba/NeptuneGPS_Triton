@@ -115,12 +115,14 @@ const char* PloughVtWorkingSet::GetPoolLabel() const {
     // MW23 -> MW24, same day: the settings key INSTEL. / SETUP / BEALL.
     // MW24 -> MW25, same day: the key labels 12x16 (5 characters), red
     // KORR/FEJ limit lines on the range bar, the width now 7 lines wide.
+    // MW25 -> MW26, same day: the hydraulics type on the HIDR. page, MIN
+    // km/h in its row on the calibration page.
 #if defined(ENGLISH)
-    return "MW25E";
+    return "MW26E";
 #elif defined(HUNGARIAN)
-    return "MW25H";
+    return "MW26H";
 #else
-    return "MW25";
+    return "MW26";
 #endif
 }
 

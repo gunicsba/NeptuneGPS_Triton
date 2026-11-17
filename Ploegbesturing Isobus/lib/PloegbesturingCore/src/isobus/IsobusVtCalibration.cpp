@@ -109,9 +109,19 @@ FLASHMEM void IsobusVtCalibration::OnWidthKey(uint16_t keyObjectId, HeldKey::Eve
 }
 
 FLASHMEM void IsobusVtCalibration::OnNumericValue(uint16_t objectId, uint32_t value) {
-    if (hydOpen && objectId >= Input_Hyd0 && objectId < Input_Hyd0 + kDanfossParamCount) {
+    if (hydOpen && objectId == Input_HydType) {
+        if (value <= kHighestHydraulicType) {
+            implement->SetHydraulicsStored(HydraulicType(value));
+            serialDebug->print("VT: hydraulics type ");
+            serialDebug->println(int(value));
+        }
+        shownHydType = value;   // resent by Update() if it differs
+        return;
+    }
+    if (hydOpen && objectId >= Input_Hyd0 && objectId < Input_Hyd0 + kHydRows) {
         const uint8_t i = uint8_t(objectId - Input_Hyd0);
-        if (!implement->SetDanfoss(DanfossParam(i), value > 0xFF ? 0x100 : int(value))) {
+        const DanfossParam param = HydParamFor(i, implement->GetHydraulics());
+        if (!implement->SetDanfoss(param, value > 0xFF ? 0x100 : int(value))) {
             serialDebug->println("VT: hydraulics value refused");
         }
         shownHyd[i] = value;   // resent by Update() if it differs from what is held
@@ -245,11 +255,24 @@ FLASHMEM void IsobusVtCalibration::updateWidthProcedure(VtCalibrationOutput& out
     }
 }
 
+FLASHMEM DanfossParam IsobusVtCalibration::HydParamFor(uint8_t row, HydraulicType type) {
+    const bool danfoss = type == HydraulicType::Danfoss;
+    switch (row) {
+        case 0:  return DanfossParam::Center;
+        case 1:  return danfoss ? DanfossParam::Manual : DanfossParam::DutyManual;
+        case 2:  return danfoss ? DanfossParam::AutoMax : DanfossParam::DutyAutoMax;
+        case 3:  return danfoss ? DanfossParam::AutoMin : DanfossParam::DutyAutoMin;
+        default: return DanfossParam::FullError;
+    }
+}
+
 FLASHMEM void IsobusVtCalibration::openHydraulics() {
     hydOpen = true;
     widerKey.Drop();
     narrowerKey.Drop();
-    for (uint8_t i = 0; i < kDanfossParamCount; i++) shownHyd[i] = kNotSent;
+    for (uint8_t i = 0; i < kHydRows; i++) shownHyd[i] = kNotSent;
+    shownHydType = kNotSent;
+    shownHydCenter = kNotSent;
     shownHydSignal = kNotSent;
     wantedMask = Plough_HydMask;
     serialDebug->println("VT: hydraulics page open");
@@ -272,8 +295,14 @@ FLASHMEM void IsobusVtCalibration::updateHydraulics(VtCalibrationOutput& out) {
     // As the width procedure: Breder is +1, Smaller -1, both or neither stop.
     implement->Adjust(2, short(wider == narrower ? 0 : wider ? 1 : -1));
 
-    for (uint8_t i = 0; i < kDanfossParamCount; i++) {
-        const uint32_t value = implement->GetDanfoss(DanfossParam(i));
+    const HydraulicType hydraulics = implement->GetHydraulics();
+    const uint32_t type = uint32_t(hydraulics);
+    if (type != shownHydType && out.ChangeNumericValue(Input_HydType, type)) shownHydType = type;
+    // KOZEP % only for Danfoss.
+    const uint32_t center = hydraulics == HydraulicType::Danfoss ? uint32_t(Cont_HydCenter) : 0xFFFFu;
+    if (center != shownHydCenter && out.ChangeNumericValue(Ptr_HydCenter, center)) shownHydCenter = center;
+    for (uint8_t i = 0; i < kHydRows; i++) {
+        const uint32_t value = implement->GetDanfoss(HydParamFor(i, hydraulics));
         if (value != shownHyd[i] && out.ChangeNumericValue(Input_Hyd0 + i, value)) shownHyd[i] = value;
     }
     // The signal in 0.1 %, at most every kSensorSendMs.

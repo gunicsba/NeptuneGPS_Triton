@@ -70,6 +70,10 @@ public:
     bool IsWidthProcedureOpen() const { return widthOpen; }
     bool IsHydraulicsOpen() const { return hydOpen; }
 
+    // The parameter a hydraulics page row edits for a type: KEZI and the
+    // AUTO rows the Danfoss deflection or the solenoids' duty.
+    static DanfossParam HydParamFor(uint8_t row, HydraulicType type);
+
     // The Calibrate key, on release. Opens the page unless the cab wizard
     // holds the session.
     void OnCalibrateKey();
@@ -135,7 +139,9 @@ private:
     // operator enters it (ImplementPlough::SetDanfoss), the signal on F1 now,
     // and Smaller / Breder driving at the manual deflection while held.
     bool          hydOpen = false;
-    uint32_t      shownHyd[kDanfossParamCount];
+    uint32_t      shownHyd[kHydRows];
+    uint32_t      shownHydType = kNotSent;
+    uint32_t      shownHydCenter = kNotSent;   // what Ptr_HydCenter points at
     uint32_t      shownHydSignal = kNotSent;
     unsigned long lastHydSignalMs = 0;
     void openHydraulics();
