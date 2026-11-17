@@ -390,6 +390,14 @@ test(VTObjectPool, calibrationPage_hasARowPerSetting_withTheTablesBounds) {
             assertEqual((int)poolU16(at + 15), (int)Str_CalOn);
             assertEqual((int)poolU16(at + 17), (int)Str_CalOff);
         }
+        else if (line.kind == SettingKind::Tenths) {
+            // MIN km/h: a number shown x 0.1 with one decimal.
+            assertTrue(isType(objects, Input_Cal0 + i, 9));
+            const uint32_t at = objects.at(Input_Cal0 + i).at;
+            assertEqual(poolI32(at + 17), (int32_t)line.lowest);
+            assertEqual(poolI32(at + 21), (int32_t)line.highest);
+            assertEqual((int)VT3PoolData[at + 33], 1);   // decimals
+        }
         else if (line.kind == SettingKind::Hydraulics) {
             // NORMAAL, BYPASS, DANFOSS, the list index being the HydraulicType value.
             assertTrue(isType(objects, Input_Cal0 + i, 10));

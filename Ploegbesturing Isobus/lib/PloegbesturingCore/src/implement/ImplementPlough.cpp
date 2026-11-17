@@ -281,6 +281,13 @@ void ImplementPlough::Adjust(byte mode, short int direction) {
         danfossNextPct = mode == 0 ? DanfossAutoPct(abs(position - setpoint) - deadband)
                                    : danfoss[uint8_t(DanfossParam::Manual)];
     }
+    else if (mode != 1) {
+        // The solenoids' duty: DutyManual on the buttons, in auto from
+        // DutyAutoMin past the deadband to DutyAutoMax (100 / 100 / 100, the
+        // default, is the full-on bang-bang control as before).
+        pwm = DanfossPctToPwm(mode == 0 ? DutyAutoPct(abs(position - setpoint) - deadband)
+                                        : danfoss[uint8_t(DanfossParam::DutyManual)]);
+    }
 
     // ------------------------------
     // Adjust tree including deadband
@@ -332,6 +339,12 @@ void ImplementPlough::Narrower(byte pwm) {
 #if defined(OUTPUT_VALVE_PH_2)
     digitalWrite(OUTPUT_VALVE_PH_2, OUTPUT_NARROW_PH_LEVEL);
     analogWrite(OUTPUT_VALVE_EN_2, pwm);
+#elif defined(OUTPUT_VALVE_BRIDGE_2)
+    // One bridge, IN1 = narrow, IN2 = wide: IN1 on, IN2 the inverted duty,
+    // so the solenoid is driven or braked (slow decay), never floating. Both
+    // through analogWrite: on the ESP32 a pin on PWM ignores digitalWrite.
+    analogWrite(OUTPUT_NARROW_2, pwm ? 255 : 0);
+    analogWrite(OUTPUT_WIDE_2, pwm ? 255 - pwm : 0);
 #else
     // digitalWrite, not analogWrite: pins 20/21 have no PWM on Teensy 4.x, where
     // analogWrite does nothing, so the valves never opened (#242). They only
@@ -339,7 +352,8 @@ void ImplementPlough::Narrower(byte pwm) {
     digitalWrite(OUTPUT_WIDE_2, LOW);
     digitalWrite(OUTPUT_NARROW_2, pwm ? HIGH : LOW);
 #endif
-    driveBypass(hydraulics == HydraulicType::Bypass ? pwm : 0);
+    // The bypass valve is on / off: fully on whatever the solenoids' duty.
+    driveBypass(hydraulics == HydraulicType::Bypass && pwm ? kValvePwm : 0);
 #ifdef OUTPUT_LED_2
     digitalWrite(OUTPUT_LED_2, HIGH);
 #endif
@@ -361,11 +375,14 @@ void ImplementPlough::Wider(byte pwm) {
 #if defined(OUTPUT_VALVE_PH_2)
     digitalWrite(OUTPUT_VALVE_PH_2, (OUTPUT_NARROW_PH_LEVEL == LOW) ? HIGH : LOW);
     analogWrite(OUTPUT_VALVE_EN_2, pwm);
+#elif defined(OUTPUT_VALVE_BRIDGE_2)
+    analogWrite(OUTPUT_WIDE_2, pwm ? 255 : 0);
+    analogWrite(OUTPUT_NARROW_2, pwm ? 255 - pwm : 0);
 #else
     digitalWrite(OUTPUT_WIDE_2, pwm ? HIGH : LOW);
     digitalWrite(OUTPUT_NARROW_2, LOW);
 #endif
-    driveBypass(hydraulics == HydraulicType::Bypass ? pwm : 0);
+    driveBypass(hydraulics == HydraulicType::Bypass && pwm ? kValvePwm : 0);
 #ifdef OUTPUT_LED_2
     digitalWrite(OUTPUT_LED_2, HIGH);
 #endif
@@ -384,6 +401,9 @@ void ImplementPlough::Stop() {
     }
 #if defined(OUTPUT_VALVE_PH_2)
     analogWrite(OUTPUT_VALVE_EN_2, 0);
+#elif defined(OUTPUT_VALVE_BRIDGE_2)
+    analogWrite(OUTPUT_WIDE_2, 0);
+    analogWrite(OUTPUT_NARROW_2, 0);
 #else
     digitalWrite(OUTPUT_WIDE_2, LOW);
     digitalWrite(OUTPUT_NARROW_2, LOW);
@@ -412,6 +432,11 @@ void ImplementPlough::SetHydraulics(HydraulicType value) {
     Stop();
 }
 
+void ImplementPlough::SetHydraulicsStored(HydraulicType value) {
+    SetHydraulics(value);
+    if (EEPROM.read(68) != byte(hydraulics)) EEPROM.write(68, byte(hydraulics));
+}
+
 // ----------------------------------------------------------------------
 // The Danfoss tuning: each byte as stored if within its bounds, else its
 // default; set from the VT's HYDRAULIEK page and stored at once (only a
@@ -436,6 +461,15 @@ bool ImplementPlough::SetDanfoss(DanfossParam param, int value) {
 
 // Auto's deflection for an error `beyondCm` past the deadband: AutoMin just
 // past it, rising to AutoMax at FullError (AutoMin above AutoMax: AutoMax).
+byte ImplementPlough::DutyAutoPct(int beyondCm) const {
+    const int most  = danfoss[uint8_t(DanfossParam::DutyAutoMax)];
+    const int least = min(int(danfoss[uint8_t(DanfossParam::DutyAutoMin)]), most);
+    const int full  = danfoss[uint8_t(DanfossParam::FullError)];
+    if (beyondCm >= full) return byte(most);
+    if (beyondCm <= 0) return byte(least);
+    return byte(least + (most - least) * beyondCm / full);
+}
+
 byte ImplementPlough::DanfossAutoPct(int beyondCm) const {
     const int most  = danfoss[uint8_t(DanfossParam::AutoMax)];
     const int least = min(int(danfoss[uint8_t(DanfossParam::AutoMin)]), most);
@@ -460,7 +494,7 @@ void ImplementPlough::driveDanfoss(byte signal) {
 #elif defined(OUTPUT_VALVE_BRIDGE_2)
     // One bridge, IN1 = narrow, IN2 = wide: IN1 high, IN2 the inverted duty,
     // so F1 is driven high or braked low, never left floating.
-    digitalWrite(OUTPUT_NARROW_2, HIGH);
+    analogWrite(OUTPUT_NARROW_2, 255);
     analogWrite(OUTPUT_WIDE_2, 255 - signal);
 #else
     digitalWrite(OUTPUT_WIDE_2, LOW);

@@ -337,7 +337,7 @@ enum PloughVtObjectId : uint16_t {
     Key_HydBack                = 332,
     Label_HydBack              = 333,
     Label_HydTitle             = 334,
-    Label_Hyd0                 = 335,   // .. 339, one per DanfossParam
+    Label_Hyd0                 = 335,   // .. 339, one per page row (kHydRows)
     Input_Hyd0                 = 340,   // .. 344
     Label_HydSignal            = 345,
     Out_HydSignal              = 346,
@@ -356,6 +356,15 @@ enum PloughVtObjectId : uint16_t {
     Bar_RangeNowR2             = 355,
     Bar_RangeNowL3             = 356,
     Bar_RangeNowR3             = 357,
+
+    // The hydraulics page's first row (2026-11-17): the hydraulics type,
+    // moved from the calibration page (MIN km/h took its row there).
+    Label_HydType              = 358,
+    Input_HydType              = 359,
+    // KOZEP % only for Danfoss: its label and input in a container, behind
+    // a pointer that is NULL for the other types.
+    Cont_HydCenter             = 360,
+    Ptr_HydCenter              = 361,
 };
 
 // The AUTO / KEZI key's two labels, the same length (the label object's).
