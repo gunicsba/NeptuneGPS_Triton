@@ -112,12 +112,13 @@ const char* PloughVtWorkingSet::GetPoolLabel() const {
     // place of the BYPASS yes/no on the calibration page.
     // MW22 -> MW23, 2026-11-17: AUTO / KEZI on the main screen, the
     // hydraulics page (HIDR. on the calibration page), the key labels 8x12.
+    // MW23 -> MW24, same day: the settings key INSTEL. / SETUP / BEALL.
 #if defined(ENGLISH)
-    return "MW23E";
+    return "MW24E";
 #elif defined(HUNGARIAN)
-    return "MW23H";
+    return "MW24H";
 #else
-    return "MW23";
+    return "MW24";
 #endif
 }
 
