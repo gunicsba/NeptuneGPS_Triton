@@ -1300,11 +1300,9 @@ FLASHMEM void BuildObjectPool() {
     // and - (#282); the AUX-N functions show the same labels.
     appendOutputString(Label_Wider, kKeyLabelW, kKeySignH, Font_White_Large, 1, "+");
     appendOutputString(Label_Narrower, kKeyLabelW, kKeySignH, Font_White_Large, 1, "-");
-    // "CALIBR" not "KALIBR": LanguagePlough.hpp's own LCD wizard strings
-    // already say "Breedte calibratie"/"Rotatie calibratie", so this matches
-    // what the operator reads on the cab display. 6 chars at 8x8 = 48 px,
-    // inside the 60 px key label box.
-    appendOutputString(Label_Calibrate, kKeyLabelW, kKeyLabelH, Font_White_Small, 1, VT_TEXT("CALIBR", "CALIBR", "KALIBR"));
+    // The settings page's key (CALIBR / KALIBR until 2026-11-17): at most
+    // 7 characters at 8x12 = 56 px, inside the 60 px key label box.
+    appendOutputString(Label_Calibrate, kKeyLabelW, kKeyLabelH, Font_White_Small, 1, VT_TEXT("INSTEL.", "SETUP", "BEÁLL."));
     // PLAN opens the width planner's page.
     appendKey(Key_Plan, kBlack, KeyCode_Plan, Label_Plan);
     appendOutputString(Label_Plan, kKeyLabelW, kKeyLabelH, Font_White_Small, 1, VT_TEXT("PLAN", "PLAN", "TERV"));
